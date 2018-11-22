@@ -1,0 +1,25 @@
+# Binaries
+*.o
+*.d
+*.a
+difsimplificator
+
+
+# Vim temporary files
+*.swp
+
+# ABC binaries and configs
+/abc/abc
+/abc/arch_flags
+
+# Python 
+__pycache__
+
+# Build directory
+build
+
+# Testing directory
+test
+
+# Pictures directory
+pics

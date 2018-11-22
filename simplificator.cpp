@@ -58,17 +58,16 @@ void print_help(const char *argv0) {
         by default, <block_size_x> == <block_size_y>, <block_size_x> == 15, <output_file_name> == <input_file_name>,
         <cross_size> = 20, <cross_radius> = 1
 
-        --change-color <input_file_name> <from_R> <from_G> <from_B> <to_R> <to_G> <to_B> [ <output_file_name> ]
+    --change-color <input_file_name> <from_R> <from_G> <from_B> <to_R> <to_G> <to_B> [ <output_file_name> ]
         changes color (<from_R>, <from_G>, <from_B>) to (<to_R>, <to_G>, <to_B>) in picture <input_file_name>
 
-        --count-colors <input_file_name> <crossSize>
+    --count-colors <input_file_name> <crossSize>
         prints all cross colors in <input_file_name> (if <crossSize> is wrong answer will be also wrong)
 
 
     [<param>=default_val] means that parameter is optional.
     )";
-    std::cout << "Usage: " << argv0 << " <input_image_path> <output_image_path> "
-         << "PARAMS" << std::endl;
+    std::cout << "Usage: " << argv0 << " PARAMS" << std::endl;
     std::cout << usage;
 }
 
