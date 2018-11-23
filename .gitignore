@@ -21,5 +21,8 @@ build
 # Testing directory
 test
 
+# Output directory
+output
+
 # Pictures directory
 pics

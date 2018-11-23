@@ -32,7 +32,9 @@ void print_help(const char *argv0) {
 
                 <simplification_b> ||
 
-                <max_color_count> ]
+                <max_color_count> ||
+
+                --fast]
         makes an image as blocks <block_size_x> X <block_size_y> 
         by default, <block_size_x> == <block_size_y>, <block_size_x> == 15, <output_file_name> == <input_file_name>
         simplification_color means step between neighbour colors (and must be from 1 to 254)
@@ -53,7 +55,9 @@ void print_help(const char *argv0) {
 
                 <simplification_b> ||
 
-                <max_color_count> ]
+                <max_color_count> ||
+
+                --fast]
         makes an image as crosses <cross_size> X <cross_size> merging blocks size of <block_size_x> X <block_size_y>
         by default, <block_size_x> == <block_size_y>, <block_size_x> == 15, <output_file_name> == <input_file_name>,
         <cross_size> = 20, <cross_radius> = 1
@@ -67,7 +71,8 @@ void print_help(const char *argv0) {
 
     [<param>=default_val] means that parameter is optional.
     )";
-    std::cout << "Usage: " << argv0 << " PARAMS" << std::endl;
+    std::cout << "Usage: " << argv0 << " <input_image_path> "
+         << "PARAMS" << std::endl;
     std::cout << usage;
 }
 
@@ -266,7 +271,13 @@ unsigned long long nearestColor(std::map<unsigned long long, int> &cols, unsigne
     return res;
 }
 
-
+void colorBlock(Image &res, Image &src, int x0, int y0, int sizeX, int sizeY) {
+    for(int i = 0; i < sizeX; ++i) {
+        for(int j = 0; j < sizeY; ++j) {
+            res(x0 * sizeX + i, y0 * sizeY + j) = src(x0, y0);
+        }
+    }
+}
 
 std::tuple<int, int, int> colorFromBlock(Image &src, int simplificatorFunc, int x, int y, int sizeX, int sizeY) {
     int r, g, b;
@@ -323,38 +334,93 @@ void cross(Image &res, std::tuple<int, int, int> color, int x, int y, int size, 
     }
 }
 
-Image blockSimplificator(Image src, int simplificatorFunc, int sizeX, int sizeY) {
-    for(int i = 0; i < src.n_rows / sizeX; ++i) {
-        for(int j = 0; j < src.n_cols / sizeY; ++j) {
-            simplificateBlock(src, simplificatorFunc, i * sizeX, j * sizeY, sizeX, sizeY);
+void removeColorNearest(Image &src, std::map<unsigned long long, int> &cols) {
+    unsigned long long prevCol, nextCol;
+    int dist = colDistance(0, 0, 0, 255, 255, 255) + 1;
+    for(auto &i : cols) {
+        for(auto &j : cols) {
+            if(i.first == j.first) {
+                continue;
+            }
+            unsigned long long c1 = i.first, c2 = j.first;
+            if(dist > colDistance(c1 >> 16, (c1 >> 8) & 0xFF, c1 & 0xFF, c2 >> 16, (c2 >> 8) & 0xFF, c2 & 0xFF)) {
+                dist = colDistance(c1 >> 16, (c1 >> 8) & 0xFF, c1 & 0xFF, c2 >> 16, (c2 >> 8) & 0xFF, c2 & 0xFF);
+                prevCol = c1;
+                nextCol = c2;
+            }
         }
-    } 
-    while(cols.size() > MAX_COLOR_COUNT) {
-        unsigned long long prevCol = minColor(cols);
-        unsigned long long nextCol = nearestColor(cols, prevCol);
-        src = changeColor(src, prevCol >> 16, (prevCol >> 8) & 0xFF, prevCol & 0xFF, nextCol >> 16, (nextCol >> 8) & 0xFF, nextCol & 0xFF);
-        cols[nextCol] += cols[prevCol];
-        cols.erase(cols.find(prevCol));
     }
-    return src;
+    if(cols[prevCol] > cols[nextCol]) {
+        std::swap(prevCol, nextCol);
+    }
+    changeColor(src, prevCol >> 16, (prevCol >> 8) & 0xFF, prevCol & 0xFF, nextCol >> 16, (nextCol >> 8) & 0xFF, nextCol & 0xFF);
+    cols[nextCol] += cols[prevCol];
+    cols.erase(cols.find(prevCol));
 }
 
-Image crossSimplificator(Image& src, int simplificatorFunc, int sizeX, int sizeY, int crossSize, int crossRadius) {
+void removeColorMinCount(Image &src, std::map<unsigned long long, int> &cols) {
+    unsigned long long prevCol = minColor(cols);
+    unsigned long long nextCol = nearestColor(cols, prevCol);
+    changeColor(src, prevCol >> 16, (prevCol >> 8) & 0xFF, prevCol & 0xFF, nextCol >> 16, (nextCol >> 8) & 0xFF, nextCol & 0xFF);
+    cols[nextCol] += cols[prevCol];
+    cols.erase(cols.find(prevCol));
+}
+
+Image blockSimplificator(Image &src, int simplificatorFunc, int sizeX, int sizeY, int colorSimplificatorType) {
+    Image resT(src.n_rows / sizeX, src.n_cols / sizeY);
+    for(int i = 0; i < src.n_rows / sizeX; ++i) {
+        for(int j = 0; j < src.n_cols / sizeY; ++j) {
+            resT(i, j) = colorFromBlock(src, simplificatorFunc, i * sizeX, j * sizeY, sizeX, sizeY);
+        }
+    }
+    int done = 0;
+    int needed = cols.size() <= MAX_COLOR_COUNT ? 0 : (cols.size() - MAX_COLOR_COUNT); 
+    int prev = -1;
+    while(cols.size() > MAX_COLOR_COUNT) {
+        if(colorSimplificatorType == 1){
+            removeColorMinCount(resT, cols);
+        } else {
+            removeColorNearest(resT, cols);
+        }
+        done++;
+        if(prev < done * 100 / needed) {
+            prev = done * 100 / needed;
+            std::cout << prev << " %"<< std::endl;
+        }
+    }
+    Image res(resT.n_rows * sizeX, resT.n_cols * sizeY);
+    for(int i = 0; i < resT.n_rows; ++i) {
+        for(int j = 0; j < resT.n_cols; ++j) {
+            colorBlock(res, resT, i, j, sizeX, sizeY);
+        }
+    }
+    std::cout << std::get<0>(src(0,0)) << " " << std::get<0>(res(0,0)) << std::endl;
+    return res;
+}
+
+Image crossSimplificator(Image& src, int simplificatorFunc, int sizeX, int sizeY, int crossSize, int crossRadius, int colorSimplificatorType) {
     Image resT(src.n_rows / sizeX, src.n_cols / sizeY);
     Image res((src.n_rows / sizeX) * crossSize, (src.n_cols / sizeY) * crossSize);
     std::cout << "Image size (in crosses) : " << res.n_cols / crossSize << " x " << res.n_rows / crossSize << std::endl;
     for(int i = 0; i < src.n_rows / sizeX; ++i) {
         for(int j = 0; j < src.n_cols / sizeY; ++j) {
-            //cross(res, colorFromBlock(src, simplificatorFunc, i * sizeX, j * sizeY, sizeX, sizeY), i * crossSize, j * crossSize, crossSize, crossRadius);
             resT(i, j) = colorFromBlock(src, simplificatorFunc, i * sizeX, j * sizeY, sizeX, sizeY);
         }
     }
+    int done = 0;
+    int needed = cols.size() <= MAX_COLOR_COUNT ? 0 : (cols.size() - MAX_COLOR_COUNT); 
+    int prev = -1;
     while(cols.size() > MAX_COLOR_COUNT) {
-        unsigned long long prevCol = minColor(cols);
-        unsigned long long nextCol = nearestColor(cols, prevCol);
-        resT = changeColor(resT, prevCol >> 16, (prevCol >> 8) & 0xFF, prevCol & 0xFF, nextCol >> 16, (nextCol >> 8) & 0xFF, nextCol & 0xFF);
-        cols[nextCol] += cols[prevCol];
-        cols.erase(cols.find(prevCol));
+        if(colorSimplificatorType == 1){
+            removeColorMinCount(resT, cols);
+        } else {
+            removeColorNearest(resT, cols);
+        }
+        done++;
+        if(prev < done * 100 / needed) {
+            prev = done * 100 / needed;
+            std::cout << prev << " %"<< std::endl;
+        }        
     }
     std::cout << "Total : " << crosses_count << std::endl;
     for(auto &i : cols){
@@ -382,8 +448,8 @@ int main(int argc, char **argv) {
         Image src_image = load_image(argv[2]), dst_image;
         dst_image_name = argv[2];
         std::string action(argv[1]);
-
         if (action == "--image-to-crosses") {
+            int colorSimplificatorType = 0;
             int sizeX = 15, sizeY = 15;
             int crossSize = 20, crossRadius = 1;
             check_argc(argc, 4, 14);
@@ -398,6 +464,12 @@ int main(int argc, char **argv) {
                 throw "3rd argument must be --median or --average";
             }
             switch(argc) {
+                case 14:
+                    if(std::string(argv[13]) == "--fast") {
+                        colorSimplificatorType = 1;
+                    } else {
+                        throw "13th argument must be --fast";
+                    }
                 case 13:
                     MAX_COLOR_COUNT = read_value<int>(argv[12]);
                     check_number("MAX_COLOR_COUNT", MAX_COLOR_COUNT, 2, 0x1000000);
@@ -421,12 +493,13 @@ int main(int argc, char **argv) {
                 case 5:
                     dst_image_name = argv[4];
                 case 4:
-                    dst_image = crossSimplificator(src_image, simplificatorFunc, sizeX, sizeY, crossSize, crossRadius);
+                    dst_image = crossSimplificator(src_image, simplificatorFunc, sizeX, sizeY, crossSize, crossRadius, colorSimplificatorType);
             }
         } else if (action == "--merge-blocks") {
+            int colorSimplificatorType = 0;
             int sizeX = 15, sizeY = 15;
             int crossSize = 20, crossRadius = 1;
-            check_argc(argc, 4, 10);
+            check_argc(argc, 4, 12);
             int simplificatorFunc;
             if(std::string(argv[3]) == "--median") {
                 simplificatorFunc = 1;
@@ -438,6 +511,15 @@ int main(int argc, char **argv) {
                 throw "3rd argument must be --median or --average";
             }
             switch(argc){
+                case 12:
+                    if(std::string(argv[11]) == "--fast") {
+                        colorSimplificatorType = 1;
+                    } else {
+                        throw "13th argument must be --fast";
+                    }
+                case 11:
+                    MAX_COLOR_COUNT = read_value<int>(argv[10]);
+                    check_number("MAX_COLOR_COUNT", MAX_COLOR_COUNT, 2, 0x1000000);
                 case 10:
                     COLOR_SIMPLIFICATE_PARAMETR_B = read_value<int>(argv[9]);
                     check_number("COLOR_SIMPLIFICATE_PARAMETER_B", COLOR_SIMPLIFICATE_PARAMETR_B, 1, 254);
@@ -454,7 +536,7 @@ int main(int argc, char **argv) {
                 case 5:
                     dst_image_name = argv[4];
                 case 4:
-                    dst_image = blockSimplificator(src_image, simplificatorFunc, sizeX, sizeY);
+                    dst_image = blockSimplificator(src_image, simplificatorFunc, sizeX, sizeY, colorSimplificatorType);
             }
         } else if (action == "--change-color") {
             check_argc(argc, 9, 10);
