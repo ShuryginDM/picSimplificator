@@ -327,7 +327,7 @@ unsigned long long nearestColor(std::map<unsigned long long, int> &cols, unsigne
 void print_help(const char *argv0) {
     const char *usage = R"(where PARAMS are from list:
 
-    --merge-blocks --input <input_file_name> (--median || --average || --max) [ --output <output_file_name>]
+    --image-to-blocks --input <input_file_name> (--median || --average || --max) [ --output <output_file_name>]
            
                 [--block-size <block_size_x> <block_size_y>]
 
@@ -370,6 +370,8 @@ void print_help(const char *argv0) {
 
     --count-colors <input_file_name> <crossSize>
         prints all cross colors in <input_file_name> (if <crossSize> is wrong answer will be also wrong)
+
+    
 
 
     [<param>=default_val] means that parameter is optional.

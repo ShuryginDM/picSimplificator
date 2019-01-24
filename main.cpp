@@ -1,4 +1,4 @@
-#include "simplificator.h"
+#include "src/simplificator.h"
 #include <vector>
 #include <fstream>
 

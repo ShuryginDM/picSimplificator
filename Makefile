@@ -3,8 +3,11 @@ CFLAGS = -O3 -std=c++11
 
 all: difsimplificator
 
-difsimplificator: simplificator.cpp io.o EasyBMP.o
-	$(CC) $(CFLAGS) simplificator.cpp EasyBMP.o io.o  -o difsimplificator
+difsimplificator: main.cpp simplificator.o 
+	$(CC) $(CFLAGS) main.cpp simplificator.o EasyBMP.o io.o -o difsimplificator
+
+simplificator.o: src/simplificator.cpp io.o EasyBMP.o
+	$(CC) $(CFLAGS) src/simplificator.cpp EasyBMP.o io.o  -c 
 
 io.o: include/io.cpp
 	$(CC) $(CFLAGS) -c include/io.cpp
